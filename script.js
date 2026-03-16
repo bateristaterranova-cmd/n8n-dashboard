@@ -23,6 +23,7 @@ let allExecutions = [];
 let filteredExecutions = [];
 let currentSearchTerm = '';
 let currentCategory = 'all';
+let workflowDictionary = {};
 
 // Elementos del DOM
 const searchInput = document.getElementById('searchInput');
@@ -45,7 +46,7 @@ const POLLING_INTERVAL = 3000; // 3 segundos
 /**
  * Inicialización
  */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Configurar pestañas
     setupTabs();
     
@@ -53,8 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSearch();
     setupCategoryFilters();
 
-    // Iniciar primer Fetch y luego Polling
-    fetchExecutions();
+    // Iniciar primer Fetch de Flujos, luego Ejecuciones y luego Polling
+    await fetchWorkflows();
+    await fetchExecutions();
     setInterval(fetchExecutions, POLLING_INTERVAL);
 });
 
@@ -131,6 +133,37 @@ function setupSearch() {
     });
 }
 
+/**
+ * Petición Fetch de Flujos (Workflows) 
+ * Para armar diccionario de { ID : Nombre }
+ */
+async function fetchWorkflows() {
+    if (!API_KEY) return;
+    
+    try {
+        const response = await fetch(`${N8N_BASE_URL}/api/v1/workflows?limit=250`, {
+            method: 'GET',
+            headers: {
+                'accept': 'application/json',
+                'X-N8N-API-KEY': API_KEY
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.data) {
+                // n8n v1 API devuelve { data: [...] } y cada objeto suele tener id e name
+                data.data.forEach(workflow => {
+                    workflowDictionary[workflow.id] = workflow.name;
+                });
+                console.log("Flujos cargados al diccionario:", Object.keys(workflowDictionary).length);
+            }
+        }
+    } catch (error) {
+        console.error('Error obteniendo flujos de n8n para nombres:', error);
+    }
+}
+
 
 /**
  * Petición Fetch a la API de n8n
@@ -176,8 +209,9 @@ async function fetchExecutions() {
 function applyFiltersAndRender() {
     filteredExecutions = allExecutions.filter(exec => {
         // Filtro de Búsqueda
+        const flowName = workflowDictionary[exec.workflowId] || exec.workflowData?.name || 'Workflow Desconocido';
         const idMatch = String(exec.id).includes(currentSearchTerm);
-        const nameMatch = exec.workflowData?.name?.toLowerCase().includes(currentSearchTerm) || '';
+        const nameMatch = flowName.toLowerCase().includes(currentSearchTerm) || '';
         const statusMatch = exec.status?.toLowerCase().includes(currentSearchTerm) || '';
         
         const matchesSearch = currentSearchTerm === '' || idMatch || nameMatch || statusMatch;
@@ -185,7 +219,6 @@ function applyFiltersAndRender() {
         // Filtro de Categoría
         let matchesCategory = true;
         if (currentCategory !== 'all') {
-            const flowName = exec.workflowData?.name || '';
             matchesCategory = flowName.toLowerCase().includes(currentCategory.toLowerCase());
         }
         
@@ -253,7 +286,8 @@ function renderTables() {
             const formattedDate = !isNaN(date) ? date.toLocaleString() : 'N/A';
             const statusVisuals = getStatusVisuals(exec.status);
             
-            const flowName = exec.workflowData?.name || 'Workflow Desconocido';
+            // Buscar nombre en Diccionario
+            const flowName = workflowDictionary[exec.workflowId] || exec.workflowData?.name || 'Workflow Desconocido';
             const execId = exec.id || 'N/A';
 
             const retryBtnHTML = (exec.status === 'error' || exec.status === 'crashed') 
