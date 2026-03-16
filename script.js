@@ -7,10 +7,10 @@
  */
 
 // Ejemplo: 'https://n8n.midominio.com' o 'http://localhost:5678'
-const N8N_BASE_URL = ''; 
+const N8N_BASE_URL = 'https://n8n.yaperocallate.com'; 
 
 // Tu API Key generada en el panel de n8n (Ajustes -> API de n8n)
-const API_KEY = '';
+const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNmMzMmJjNC1kNWIzLTRiMzktYjc5Zi0zZTBhZDI2Zjk1MGUiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzczNjkwMzYzfQ.cDhcXHsKqtvaWVnHxeaDCDDiox2EFnH9kQMJRUl1wSM';
 
 /**
  * --------------------------------------------------------------------------
