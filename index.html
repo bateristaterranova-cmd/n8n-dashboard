@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Dashboard Monitor</title>
+    <!-- Tailwind CSS (CDN for quick setup) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        card: '#1e293b',
+                        primary: '#3b82f6',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Heroicons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-dark text-slate-200 font-sans min-h-screen antialiased">
+    
+    <!-- Background Effects -->
+    <div class="fixed inset-0 z-0 pointer-events-none">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px]"></div>
+    </div>
+
+    <div class="relative z-10 p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
+        
+        <!-- Header & Search -->
+        <header class="flex flex-col md:flex-row justify-between items-center gap-4 bg-card/60 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-xl">
+            <div class="flex items-center gap-3">
+                <i data-lucide="workflow" class="text-primary w-8 h-8"></i>
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">n8n Monitor</h1>
+            </div>
+            
+            <div class="relative w-full md:w-96">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
+                <input type="text" id="searchInput" placeholder="Buscar flujos, estados, IDs..." 
+                    class="w-full bg-slate-900/50 border border-slate-700 text-slate-200 text-sm rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent block pl-10 p-2.5 transition-all">
+            </div>
+        </header>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Total -->
+            <div class="kpi-card bg-card/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-lg flex items-center justify-between group">
+                <div>
+                    <p class="text-slate-400 text-sm font-medium mb-1">Total Ejercuciones</p>
+                    <h3 class="text-3xl font-bold text-white transition-all group-hover:text-primary" id="kpiTotal">0</h3>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700">
+                    <i data-lucide="activity" class="text-primary w-6 h-6"></i>
+                </div>
+            </div>
+            
+            <!-- Exitosas -->
+            <div class="kpi-card bg-card/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-lg flex items-center justify-between group">
+                <div>
+                    <p class="text-slate-400 text-sm font-medium mb-1">Exitosas</p>
+                    <h3 class="text-3xl font-bold text-white transition-all group-hover:text-success" id="kpiSuccess">0</h3>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700">
+                    <i data-lucide="check-circle-2" class="text-success w-6 h-6"></i>
+                </div>
+            </div>
+
+            <!-- Fallidas -->
+            <div class="kpi-card bg-card/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-lg flex items-center justify-between group">
+                <div>
+                    <p class="text-slate-400 text-sm font-medium mb-1">Fallidas</p>
+                    <h3 class="text-3xl font-bold text-white transition-all group-hover:text-danger" id="kpiFailed">0</h3>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700">
+                    <i data-lucide="x-circle" class="text-danger w-6 h-6"></i>
+                </div>
+            </div>
+
+            <!-- En proceso -->
+            <div class="kpi-card bg-card/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-lg flex items-center justify-between group">
+                <div>
+                    <p class="text-slate-400 text-sm font-medium mb-1">En Proceso</p>
+                    <h3 class="text-3xl font-bold text-white transition-all group-hover:text-warning" id="kpiRunning">0</h3>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700">
+                    <i data-lucide="loader-2" class="text-warning w-6 h-6 animate-spin-slow"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="bg-card/80 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden">
+            <!-- Tabs Navigation -->
+            <div class="border-b border-slate-700/50 px-6 pt-4">
+                <nav class="flex space-x-8" aria-label="Tabs" id="tabsNav">
+                    <button class="tab-btn active-tab border-primary text-primary whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2" data-target="tab-executions">
+                        <i data-lucide="list" class="w-4 h-4"></i> Ejecuciones
+                    </button>
+                    <button class="tab-btn border-transparent text-slate-400 hover:text-slate-300 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-all" data-target="tab-errors">
+                        <i data-lucide="alert-circle" class="w-4 h-4"></i> Errores
+                    </button>
+                    <button class="tab-btn border-transparent text-slate-400 hover:text-slate-300 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-all" data-target="tab-api">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Consumo API
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tabs Content -->
+            <div class="p-0">
+                <!-- Executions Tab -->
+                <div id="tab-executions" class="tab-content active transition-opacity duration-300 overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-700/50 bg-slate-900/30 text-xs uppercase tracking-wider text-slate-400">
+                                <th class="p-4 font-medium">ID</th>
+                                <th class="p-4 font-medium">Nombre del Flujo</th>
+                                <th class="p-4 font-medium">Fecha/Hora</th>
+                                <th class="p-4 font-medium">Estado</th>
+                                <th class="p-4 font-medium text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="executionsTableBody" class="divide-y divide-slate-700/50 text-sm">
+                            <!-- Rows will be populated via JS -->
+                        </tbody>
+                    </table>
+                    
+                    <!-- Loading State Array -->
+                    <div id="loadingState" class="p-10 flex flex-col items-center justify-center text-slate-400">
+                        <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-primary mb-3"></i>
+                        <p>Cargando datos de n8n...</p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="emptyState" class="hidden p-10 flex flex-col items-center justify-center text-slate-400">
+                        <i data-lucide="search-x" class="w-10 h-10 mb-3 text-slate-500"></i>
+                        <p>No se encontraron resultados.</p>
+                    </div>
+                </div>
+
+                <!-- Errors Tab -->
+                <div id="tab-errors" class="tab-content hidden opacity-0 transition-opacity duration-300 p-6 text-center text-slate-400">
+                    <i data-lucide="shield-alert" class="w-12 h-12 mx-auto mb-4 text-slate-500"></i>
+                    <h3 class="text-lg font-medium text-slate-300 mb-2">Vista de Errores</h3>
+                    <p>Filtro rápido mostrando únicamente las ejecuciones con estado fallido.</p>
+                    <div class="mt-6 border border-slate-700 rounded-xl overflow-hidden text-left">
+                        <table class="w-full">
+                             <tbody id="errorsTableBody" class="divide-y divide-slate-700/50 text-sm">
+                                <!-- Errors will be populated here -->
+                             </tbody>
+                        </table>
+                        <div id="noErrorsState" class="p-8 text-center hidden">
+                            <p class="text-success flex items-center justify-center gap-2"><i data-lucide="check-circle"></i> No hay errores recientes.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Consumption Tab -->
+                <div id="tab-api" class="tab-content hidden opacity-0 transition-opacity duration-300 p-6">
+                    <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                        <i data-lucide="bar-chart-3" class="w-12 h-12 mb-4 text-primary"></i>
+                        <h3 class="text-lg font-medium text-slate-300 mb-2">Métricas de Consumo</h3>
+                        <p>Esta sección se puede integrar con los endpoints de métricas de n8n o Prometheus.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Script that handles everything -->
+    <script src="script.js"></script>
+    <script>
+        // Initialize lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
