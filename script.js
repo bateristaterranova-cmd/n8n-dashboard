@@ -22,6 +22,7 @@ const API_KEY = '';
 let allExecutions = [];
 let filteredExecutions = [];
 let currentSearchTerm = '';
+let currentCategory = 'all';
 
 // Elementos del DOM
 const searchInput = document.getElementById('searchInput');
@@ -48,13 +49,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // Configurar pestañas
     setupTabs();
     
-    // Configurar buscador
+    // Configurar buscador y filtros de categoría
     setupSearch();
+    setupCategoryFilters();
 
     // Iniciar primer Fetch y luego Polling
     fetchExecutions();
     setInterval(fetchExecutions, POLLING_INTERVAL);
 });
+
+/**
+ * Control de Filtros de Categoría
+ */
+function setupCategoryFilters() {
+    const categoryButtons = document.querySelectorAll('#categoryFilters button');
+    
+    categoryButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remover estado activo de todos
+            categoryButtons.forEach(b => {
+                b.classList.remove('border-primary/50', 'bg-primary/20', 'text-primary', 'active-category');
+                b.classList.add('border-slate-700', 'bg-slate-800', 'text-slate-300');
+            });
+            
+            // Añadir estado activo al clickeado
+            btn.classList.add('border-primary/50', 'bg-primary/20', 'text-primary', 'active-category');
+            btn.classList.remove('border-slate-700', 'bg-slate-800', 'text-slate-300');
+            
+            currentCategory = btn.getAttribute('data-category');
+            applyFiltersAndRender();
+        });
+    });
+}
 
 /**
  * Control de Pestañas (Tabs)
@@ -110,10 +136,10 @@ function setupSearch() {
  * Petición Fetch a la API de n8n
  */
 async function fetchExecutions() {
-    // Si no hay configuración, usar datos mockeados (Útil para preview)
     if (!N8N_BASE_URL || !API_KEY) {
-        console.warn("No se han configurado N8N_BASE_URL y/o API_KEY. Mostrando datos de prueba...");
-        generateMockData();
+        console.warn("Faltan credenciales N8N_BASE_URL y/o API_KEY para conectarse a producción.");
+        loadingState.innerHTML = '<div class="text-danger flex items-center gap-2"><i data-lucide="alert-triangle"></i> Faltan credenciales de n8n en script.js</div>';
+        lucide.createIcons();
         return;
     }
 
@@ -148,17 +174,23 @@ async function fetchExecutions() {
  * Filtra los datos y vuelve a renderizar todo
  */
 function applyFiltersAndRender() {
-    if (currentSearchTerm === '') {
-        filteredExecutions = [...allExecutions];
-    } else {
-        filteredExecutions = allExecutions.filter(exec => {
-            const idMatch = String(exec.id).includes(currentSearchTerm);
-            const nameMatch = exec.workflowData?.name?.toLowerCase().includes(currentSearchTerm) || '';
-            const statusMatch = exec.status?.toLowerCase().includes(currentSearchTerm) || '';
-            
-            return idMatch || nameMatch || statusMatch;
-        });
-    }
+    filteredExecutions = allExecutions.filter(exec => {
+        // Filtro de Búsqueda
+        const idMatch = String(exec.id).includes(currentSearchTerm);
+        const nameMatch = exec.workflowData?.name?.toLowerCase().includes(currentSearchTerm) || '';
+        const statusMatch = exec.status?.toLowerCase().includes(currentSearchTerm) || '';
+        
+        const matchesSearch = currentSearchTerm === '' || idMatch || nameMatch || statusMatch;
+        
+        // Filtro de Categoría
+        let matchesCategory = true;
+        if (currentCategory !== 'all') {
+            const flowName = exec.workflowData?.name || '';
+            matchesCategory = flowName.toLowerCase().includes(currentCategory.toLowerCase());
+        }
+        
+        return matchesSearch && matchesCategory;
+    });
 
     updateKPIs();
     renderTables();
