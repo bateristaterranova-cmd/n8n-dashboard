@@ -25,6 +25,11 @@ let currentSearchTerm = '';
 let currentCategory = 'all';
 let workflowDictionary = {};
 
+// Nuevas variables para diffing silencioso
+let lastFilteredExecutions = [];
+let lastSearchHash = '';
+let isFirstLoad = true;
+
 // Elementos del DOM
 const searchInput = document.getElementById('searchInput');
 const executionsTableBody = document.getElementById('executionsTableBody');
@@ -225,6 +230,41 @@ function applyFiltersAndRender() {
         return matchesSearch && matchesCategory;
     });
 
+    // --- Lógica de Diffing (Comparación) ---
+    let hasChanges = false;
+    
+    // Comparar ID más reciente (primera fila nueva vs primera fila anterior)
+    const newFirstId = filteredExecutions.length > 0 ? filteredExecutions[0].id : null;
+    const oldFirstId = lastFilteredExecutions.length > 0 ? lastFilteredExecutions[0].id : null;
+
+    if (newFirstId !== oldFirstId || filteredExecutions.length !== lastFilteredExecutions.length) {
+        hasChanges = true;
+    } else {
+        // Chequear si alguna ejecución existente cambió de status
+        for (let i = 0; i < filteredExecutions.length; i++) {
+            const newExec = filteredExecutions[i];
+            const oldExec = lastFilteredExecutions.find(e => e.id === newExec.id);
+            if (!oldExec || oldExec.status !== newExec.status) {
+                hasChanges = true;
+                break;
+            }
+        }
+    }
+    
+    // Considerar cambios en los términos de búsqueda o categoría
+    const currentSearchCategory = `${currentSearchTerm}-${currentCategory}`;
+    if (lastSearchHash !== currentSearchCategory) {
+        hasChanges = true;
+        lastSearchHash = currentSearchCategory;
+    }
+
+    if (!hasChanges && !isFirstLoad) {
+        return; // Datos idénticos, actualización silenciosa (no hacer nada)
+    }
+
+    lastFilteredExecutions = [...filteredExecutions];
+    // ----------------------------------------
+
     updateKPIs();
     renderTables();
 }
@@ -296,8 +336,12 @@ function renderTables() {
                    </button>`
                 : `<span class="text-slate-500 text-xs px-3 py-1.5 block text-right">-</span>`;
 
+            // Animación solo en la carga inicial para panel silencioso
+            const animationClass = isFirstLoad ? 'row-enter' : '';
+            const animationStyle = isFirstLoad ? `style="animation-delay: ${index * 0.05}s"` : '';
+
             const row = `
-                <tr class="hover:bg-slate-800/50 transition-colors group row-enter" style="animation-delay: ${index * 0.05}s">
+                <tr class="hover:bg-slate-800/50 transition-colors group ${animationClass}" ${animationStyle}>
                     <td class="p-4 font-mono text-xs text-slate-400">#${execId}</td>
                     <td class="p-4 font-medium text-slate-200">
                         <div class="flex items-center gap-2">
@@ -339,6 +383,9 @@ function renderTables() {
         // Re-inicializar iconos de lucide dinamicos
         lucide.createIcons();
     }
+    
+    // Desactivar animaciones invasivas para futuras recargas (polling silencioso)
+    isFirstLoad = false;
 }
 
 /**
