@@ -1,6 +1,9 @@
 # Usa la imagen oficial de Nginx basada en Alpine (ligera y óptima para producción)
 FROM nginx:alpine
 
+# Copia la configuración del proxy de Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Copia los archivos estáticos del proyecto al directorio público de Nginx
 COPY index.html /usr/share/nginx/html/
 COPY style.css /usr/share/nginx/html/
