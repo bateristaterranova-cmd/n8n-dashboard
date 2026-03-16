@@ -136,9 +136,9 @@ function setupSearch() {
  * Petición Fetch a la API de n8n
  */
 async function fetchExecutions() {
-    if (!N8N_BASE_URL || !API_KEY) {
-        console.warn("Faltan credenciales N8N_BASE_URL y/o API_KEY para conectarse a producción.");
-        loadingState.innerHTML = '<div class="text-danger flex items-center gap-2"><i data-lucide="alert-triangle"></i> Faltan credenciales de n8n en script.js</div>';
+    if (!API_KEY) {
+        console.warn("Falta API_KEY para conectarse a producción.");
+        loadingState.innerHTML = '<div class="text-danger flex items-center gap-2"><i data-lucide="alert-triangle"></i> Falta API_KEY de n8n en script.js</div>';
         lucide.createIcons();
         return;
     }
@@ -351,8 +351,8 @@ function getStatusVisuals(status) {
  * Botón Reintentar Acción Falsa/Mock
  */
 function retryExecution(id) {
-    if (!N8N_BASE_URL || !API_KEY) {
-        alert(`Reintento de ejecución #${id} simulado (Faltan credenciales).`);
+    if (!API_KEY) {
+        alert(`Reintento de ejecución #${id} simulado (Falta API Key).`);
         return;
     }
     
