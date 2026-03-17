@@ -30,6 +30,10 @@ let lastFilteredExecutions = [];
 let lastSearchHash = '';
 let isFirstLoad = true;
 
+// Referencias a los Gráficos de Chart.js
+let statusChartInstance = null;
+let hourlyChartInstance = null;
+
 // Elementos del DOM
 const searchInput = document.getElementById('searchInput');
 const executionsTableBody = document.getElementById('executionsTableBody');
@@ -157,16 +161,45 @@ async function fetchWorkflows() {
         if (response.ok) {
             const data = await response.json();
             if (data && data.data) {
-                // n8n v1 API devuelve { data: [...] } y cada objeto suele tener id e name
+                const prefixes = new Set();
                 data.data.forEach(workflow => {
                     workflowDictionary[workflow.id] = workflow.name;
+                    // Extraer prefijos asumiendo que usan ':' como separador
+                    if (workflow.name && workflow.name.includes(':')) {
+                        const prefix = workflow.name.split(':')[0].trim();
+                        prefixes.add(prefix);
+                    }
                 });
                 console.log("Flujos cargados al diccionario:", Object.keys(workflowDictionary).length);
+                generateDynamicCategoryFilters(Array.from(prefixes));
             }
         }
     } catch (error) {
         console.error('Error obteniendo flujos de n8n para nombres:', error);
     }
+}
+
+/**
+ * Genera los filtros dinámicos basados en prefijos detectados
+ */
+function generateDynamicCategoryFilters(prefixes) {
+    const categoryContainer = document.getElementById('categoryFilters');
+    if (!categoryContainer) return;
+
+    let html = `<button class="px-3 py-1.5 rounded-full text-xs font-medium border border-primary/50 bg-primary/20 text-primary transition-colors hover:bg-primary/30 active-category" data-category="all">Todos</button>`;
+
+    prefixes.sort().forEach(prefix => {
+        html += `<button class="px-3 py-1.5 rounded-full text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white" data-category="${prefix}">${prefix}</button>`;
+    });
+
+    // Añadir botón final especial para Fallidos
+    html += `<button class="px-3 py-1.5 rounded-full text-xs font-medium border border-danger/50 bg-danger/10 text-danger transition-colors hover:bg-danger/20 ml-auto" data-category="failed_only"><i data-lucide="x-circle" class="w-3 h-3 inline mr-1"></i>Ver Fallidos</button>`;
+
+    categoryContainer.innerHTML = html;
+    
+    // Volver a anclar los listeners a estos nuevos botones
+    setupCategoryFilters();
+    lucide.createIcons();
 }
 
 
@@ -223,7 +256,9 @@ function applyFiltersAndRender() {
         
         // Filtro de Categoría y Errores Pestaña
         let matchesCategory = true;
-        if (currentCategory !== 'all') {
+        if (currentCategory === 'failed_only') {
+            matchesCategory = (exec.status === 'error' || exec.status === 'failed' || exec.status === 'crashed');
+        } else if (currentCategory !== 'all') {
             matchesCategory = flowName.toLowerCase().includes(currentCategory.toLowerCase());
         }
         
@@ -270,6 +305,7 @@ function applyFiltersAndRender() {
 
     updateKPIs();
     renderTables();
+    renderCharts();
 }
 
 /**
@@ -287,6 +323,17 @@ function updateKPIs() {
     animateValue(kpiSuccess, parseInt(kpiSuccess.innerText) || 0, success, 500);
     animateValue(kpiFailed, parseInt(kpiFailed.innerText) || 0, failed, 500);
     animateValue(kpiRunning, parseInt(kpiRunning.innerText) || 0, running, 500);
+
+    // Cambiar ícono dinámicamente: Si es 0, mostrar Check, si hay procesos, mostrar Loader
+    const kpiRunningIconBox = kpiRunning.parentElement.nextElementSibling;
+    if (kpiRunningIconBox) {
+        if (running === 0) {
+            kpiRunningIconBox.innerHTML = '<i data-lucide="check" class="text-success w-6 h-6"></i>';
+        } else {
+            kpiRunningIconBox.innerHTML = '<i data-lucide="loader-2" class="text-warning w-6 h-6 animate-spin-slow"></i>';
+        }
+        lucide.createIcons({root: kpiRunningIconBox.parentElement});
+    }
 }
 
 /**
@@ -333,7 +380,13 @@ function renderTables() {
             const flowName = workflowDictionary[exec.workflowId] || exec.workflowData?.name || 'Workflow Desconocido';
             const execId = exec.id || 'N/A';
 
-            const retryBtnHTML = (exec.status === 'error' || exec.status === 'crashed') 
+            let errorMessageHtml = '';
+            if (exec.status === 'error' || exec.status === 'failed' || exec.status === 'crashed') {
+                const errorMsg = exec.data?.resultData?.error?.message || exec.data?.error?.message || exec.error?.message || exec.resultData?.error?.message || 'Error en ejecución.';
+                errorMessageHtml = `<div class="text-xs text-danger mt-1 font-mono break-words opacity-80"><i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i>${errorMsg}</div>`;
+            }
+
+            const retryBtnHTML = (exec.status === 'error' || exec.status === 'crashed' || exec.status === 'failed') 
                 ? `<button onclick="retryExecution('${execId}')" class="px-3 py-1.5 bg-danger/10 text-danger hover:bg-danger/20 rounded-lg text-xs font-medium transition-colors border border-danger/20 flex items-center gap-1 ml-auto">
                      <i data-lucide="refresh-cw" class="w-3 h-3"></i> Reintentar
                    </button>`
@@ -349,12 +402,15 @@ function renderTables() {
             const row = `
                 <tr class="hover:bg-slate-800/50 transition-colors group ${animationClass}" ${animationStyle}>
                     <td class="p-4 font-mono text-xs text-slate-400">
-                        <a href="${executionLink}" target="_blank" class="hover:text-primary transition-colors underline decoration-slate-600 underline-offset-4">#${execId}</a>
+                        <a href="${executionLink}" target="_blank" class="hover:text-primary transition-colors hover:underline decoration-slate-600 underline-offset-4">#${execId}</a>
                     </td>
                     <td class="p-4 font-medium text-slate-200">
-                        <div class="flex items-center gap-2">
-                           <div class="w-2 h-2 rounded-full ${statusVisuals.dotClass}"></div>
-                           ${flowName}
+                        <div class="flex flex-col">
+                            <div class="flex items-center gap-2">
+                               <div class="w-2 h-2 min-w-[8px] rounded-full ${statusVisuals.dotClass}"></div>
+                               ${flowName}
+                            </div>
+                            ${errorMessageHtml}
                         </div>
                     </td>
                     <td class="p-4 text-slate-400 text-sm whitespace-nowrap">${formattedDate}</td>
@@ -390,16 +446,95 @@ function renderTables() {
 
         // Re-inicializar iconos de lucide dinamicos
         lucide.createIcons();
-        
-        // Actualizar contador de API estático temporal
-        const apiCounterObj = document.getElementById('apiCounter');
-        if (apiCounterObj) {
-            animateValue(apiCounterObj, parseInt(apiCounterObj.innerText) || 0, allExecutions.length, 500);
-        }
     }
     
     // Desactivar animaciones invasivas para futuras recargas (polling silencioso)
     isFirstLoad = false;
+}
+
+/**
+ * Gráficas con Chart.js
+ */
+function renderCharts() {
+    if (allExecutions.length === 0) return;
+
+    // 1. Doughnut Chart (Exito vs Error - ultimas 50)
+    const ctxStatus = document.getElementById('statusChart');
+    if (ctxStatus) {
+        const recentExecs = allExecutions.slice(0, 50);
+        const successCount = recentExecs.filter(e => e.status === 'success').length;
+        const errorCount = recentExecs.filter(e => e.status === 'error' || e.status === 'failed' || e.status === 'crashed').length;
+        const runningCount = recentExecs.filter(e => e.status === 'running' || e.status === 'waiting').length;
+
+        if (statusChartInstance) {
+            statusChartInstance.data.datasets[0].data = [successCount, errorCount, runningCount];
+            statusChartInstance.update();
+        } else {
+            statusChartInstance = new Chart(ctxStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Exitosos', 'Fallidos', 'En Proceso'],
+                    datasets: [{
+                        data: [successCount, errorCount, runningCount],
+                        backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+                        borderColor: '#0f172a', /* color bg-dark */
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } },
+                    cutout: '70%'
+                }
+            });
+        }
+    }
+
+    // 2. Bar Chart (Volumen por Hora)
+    const ctxHourly = document.getElementById('hourlyChart');
+    if (ctxHourly) {
+        const hourlyData = {};
+        allExecutions.forEach(e => {
+            const d = new Date(e.startedAt);
+            if (!isNaN(d)) {
+                // Agregar conteo al bloque horario correspondiente formato "HH:00"
+                const h = d.getHours().toString().padStart(2, '0') + ':00';
+                hourlyData[h] = (hourlyData[h] || 0) + 1;
+            }
+        });
+
+        const labels = Object.keys(hourlyData).sort();
+        const data = labels.map(h => hourlyData[h]);
+
+        if (hourlyChartInstance) {
+            hourlyChartInstance.data.labels = labels;
+            hourlyChartInstance.data.datasets[0].data = data;
+            hourlyChartInstance.update();
+        } else {
+            hourlyChartInstance = new Chart(ctxHourly, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Ejecuciones',
+                        data: data,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { ticks: { color: '#64748b', precision: 0 }, grid: { color: '#1e293b' } },
+                        x: { ticks: { color: '#64748b' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+    }
 }
 
 /**
