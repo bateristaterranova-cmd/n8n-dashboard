@@ -221,12 +221,15 @@ function applyFiltersAndRender() {
         
         const matchesSearch = currentSearchTerm === '' || idMatch || nameMatch || statusMatch;
         
-        // Filtro de Categoría
+        // Filtro de Categoría y Errores Pestaña
         let matchesCategory = true;
         if (currentCategory !== 'all') {
             matchesCategory = flowName.toLowerCase().includes(currentCategory.toLowerCase());
         }
         
+        // Filtro estricto si estamos en la vista de errores tab?
+        // En tu UI original el tab de errores tiene su propia tabla. 
+        // Si quieres que el category filter en "Todos" actúe normal pero siga los filtros:
         return matchesSearch && matchesCategory;
     });
 
@@ -340,9 +343,14 @@ function renderTables() {
             const animationClass = isFirstLoad ? 'row-enter' : '';
             const animationStyle = isFirstLoad ? `style="animation-delay: ${index * 0.05}s"` : '';
 
+            // Link Directo a n8n
+            const executionLink = `https://n8n.yaperocallate.com/workflow/${exec.workflowId}/executions/${execId}`;
+
             const row = `
                 <tr class="hover:bg-slate-800/50 transition-colors group ${animationClass}" ${animationStyle}>
-                    <td class="p-4 font-mono text-xs text-slate-400">#${execId}</td>
+                    <td class="p-4 font-mono text-xs text-slate-400">
+                        <a href="${executionLink}" target="_blank" class="hover:text-primary transition-colors underline decoration-slate-600 underline-offset-4">#${execId}</a>
+                    </td>
                     <td class="p-4 font-medium text-slate-200">
                         <div class="flex items-center gap-2">
                            <div class="w-2 h-2 rounded-full ${statusVisuals.dotClass}"></div>
@@ -363,8 +371,8 @@ function renderTables() {
             
             tableHTML += row;
 
-            // Tabla de errores
-            if (exec.status === 'error' || exec.status === 'crashed') {
+            // Tabla de errores (failed, error, crashed)
+            if (exec.status === 'error' || exec.status === 'failed' || exec.status === 'crashed') {
                 errorsHTML += row;
                 errorsCount++;
             }
@@ -382,6 +390,12 @@ function renderTables() {
 
         // Re-inicializar iconos de lucide dinamicos
         lucide.createIcons();
+        
+        // Actualizar contador de API estático temporal
+        const apiCounterObj = document.getElementById('apiCounter');
+        if (apiCounterObj) {
+            animateValue(apiCounterObj, parseInt(apiCounterObj.innerText) || 0, allExecutions.length, 500);
+        }
     }
     
     // Desactivar animaciones invasivas para futuras recargas (polling silencioso)
